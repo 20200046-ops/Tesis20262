@@ -1,0 +1,3 @@
+Simulador Autoencoder EDR - sitio estatico (2 archivos: index.html y modelo.json).
+Sube la carpeta completa a Netlify Drop, GitHub Pages o Cloudflare Pages. No requiere servidor.
+Para probar en tu PC no abras index.html con doble clic (el navegador bloquea la lectura de modelo.json): ejecuta "python -m http.server" en la carpeta y abre http://localhost:8000

@@ -1,0 +1,437 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Simulador Autoencoder EDR</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Concepto: banco de pruebas de un detector. Controles a la izquierda, lectura del puntaje y su explicación a la derecha.
+   Tokens: tinta azulada sobre superficies frías; el color de alerta solo marca ventanas señaladas. */
+:root{
+  --bg:#EEF2F5; --surface:#FFFFFF; --surface-2:#F5F8FA; --ink:#14212B; --muted:#586A77; --line:#D5DEE5;
+  --accent:#1D6E8E; --accent-ink:#FFFFFF; --alert:#BE3A25; --alert-bg:#FBE9E5; --ok:#26734F; --ok-bg:#E4F3EB; --band:#DCE9F0; --focus:#1D6E8E;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E161C; --surface:#15212A; --surface-2:#1B2933; --ink:#E4ECF1; --muted:#93A5B2; --line:#27384380; --accent:#5DB2D2; --accent-ink:#0B1319;
+  --alert:#FF8068; --alert-bg:#3A1E19; --ok:#5CC796; --ok-bg:#16301F; --band:#1F3340; --focus:#5DB2D2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E161C; --surface:#15212A; --surface-2:#1B2933; --ink:#E4ECF1; --muted:#93A5B2; --line:#27384380; --accent:#5DB2D2; --accent-ink:#0B1319;
+  --alert:#FF8068; --alert-bg:#3A1E19; --ok:#5CC796; --ok-bg:#16301F; --band:#1F3340; --focus:#5DB2D2; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5;
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:1.5rem;line-height:1.2;margin:0;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px;font-weight:600}
+p{margin:0}
+.head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.sub{color:var(--muted);max-width:62ch;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--font-mono);font-size:.74rem;padding:3px 8px;border:1px solid var(--line);border-radius:4px;color:var(--muted);background:var(--surface)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:inherit;font-weight:500;padding:10px 14px;cursor:pointer;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+select,input[type=number],input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:7px 8px;min-width:0}
+input[type=file]{font:inherit;width:100%}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{margin-bottom:12px}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{flex:1;appearance:none;border:0;background:var(--surface-2);color:var(--ink);font:inherit;padding:7px 4px;cursor:pointer;border-right:1px solid var(--line);font-family:var(--font-mono);font-size:.82rem}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{appearance:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:500;padding:8px 14px;border-radius:4px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.hint{font-size:.8rem;color:var(--muted);margin-top:6px}
+details{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+summary{cursor:pointer;font-weight:500;font-size:.88rem}
+.counts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;margin-top:10px}
+.counts label{font-size:.74rem;margin-bottom:2px;font-family:var(--font-mono)}
+.counts small{display:block;color:var(--muted);font-size:.7rem;font-family:var(--font-mono)}
+.verdict{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between}
+.score{font-family:var(--font-mono);font-size:2.6rem;line-height:1;font-weight:500;letter-spacing:-.02em}
+.score small{font-size:.9rem;color:var(--muted);letter-spacing:0;margin-left:6px}
+.state{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:4px;font-weight:600;font-size:.92rem}
+.state.on{background:var(--alert-bg);color:var(--alert);border:1px solid var(--alert)}
+.state.off{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+.gauge{margin-top:16px}
+.gauge svg{display:block;width:100%;height:auto}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.bar{height:8px;background:var(--accent);border-radius:2px;min-width:1px}
+.bar-cell{width:38%}
+.note{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:.84rem;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.kpi{border:1px solid var(--line);border-radius:4px;padding:8px 10px;background:var(--surface-2)}
+.kpi b{display:block;font-family:var(--font-mono);font-size:1.25rem;font-weight:500}
+.kpi span{font-size:.74rem;color:var(--muted)}
+svg text{font-family:var(--font-mono);font-size:10.5px;fill:var(--muted)}
+.chart svg{width:100%;height:auto;display:block}
+.sr{position:absolute;left:-9999px}
+[hidden]{display:none!important}
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>Simulador Autoencoder EDR</h1>
+      <p class="sub">Detector de anomalías sobre ventanas horarias de telemetría SentinelOne. Usa las cinco redes entrenadas en la versión 2.8.5 y reproduce el puntaje del notebook.</p>
+    </div>
+    <div class="chips" id="chips" aria-label="Configuración del modelo"></div>
+  </div>
+
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-tab="ventana" aria-selected="true">Una ventana</button>
+    <button class="tab" role="tab" data-tab="serie" aria-selected="false">48 horas simuladas</button>
+    <button class="tab" role="tab" data-tab="gold" aria-selected="false">Cargar Gold</button>
+  </div>
+
+  <div id="estado" class="note" hidden></div>
+
+  <section id="t-ventana" class="grid" role="tabpanel">
+    <div class="panel">
+      <h2>Ventana a evaluar</h2>
+      <div class="field"><label for="v-agente">Agente</label><select id="v-agente"></select></div>
+      <div class="row">
+        <div class="field"><label for="v-hora">Hora (UTC)</label><select id="v-hora"></select></div>
+        <div class="field"><label for="v-fin">Día</label><select id="v-fin"><option value="0">Laborable</option><option value="1">Fin de semana</option></select></div>
+      </div>
+      <div class="field"><label for="v-esc">Desviación simulada</label><select id="v-esc"></select></div>
+      <div class="field"><label>Severidad k</label>
+        <div class="seg" id="v-k"><button type="button" data-k="1.5" aria-pressed="false">1,5 baja</button><button type="button" data-k="3" aria-pressed="true">3 media</button><button type="button" data-k="5" aria-pressed="false">5 alta</button></div>
+        <p class="hint">La magnitud es k veces la escala robusta del propio agente en cada variable.</p></div>
+      <div class="field"><label for="v-umb">Umbral de detección</label><select id="v-umb"></select></div>
+      <details><summary>Conteos de la ventana</summary>
+        <p class="hint">Se pueden editar. Los valores típicos salen de la mediana del perfil del agente.</p>
+        <div class="counts" id="v-counts"></div></details>
+    </div>
+    <div class="stack">
+      <div class="panel" id="v-res"></div>
+      <div class="panel"><h2>Qué la explica</h2><div class="scroll" id="v-expl"></div></div>
+    </div>
+  </section>
+
+  <section id="t-serie" class="grid" role="tabpanel" hidden>
+    <div class="panel">
+      <h2>Episodio simulado</h2>
+      <div class="field"><label for="s-agente">Agente</label><select id="s-agente"></select></div>
+      <div class="field"><label for="s-esc">Desviación</label><select id="s-esc"></select></div>
+      <div class="row">
+        <div class="field"><label for="s-ini">Inicio (hora UTC del día 1)</label><input id="s-ini" type="number" min="0" max="46" value="20"></div>
+        <div class="field"><label>Duración D</label>
+          <div class="seg" id="s-d"><button type="button" data-d="1" aria-pressed="false">1 h</button><button type="button" data-d="3" aria-pressed="true">3 h</button><button type="button" data-d="6" aria-pressed="false">6 h</button></div></div>
+      </div>
+      <div class="field"><label>Severidad k</label>
+        <div class="seg" id="s-k"><button type="button" data-k="1.5" aria-pressed="false">1,5</button><button type="button" data-k="3" aria-pressed="true">3</button><button type="button" data-k="5" aria-pressed="false">5</button></div></div>
+      <div class="row">
+        <div class="field"><label for="s-ruido">Variación de volumen</label><input id="s-ruido" type="number" min="0" max="1.5" step="0.1" value="0.5"></div>
+        <div class="field"><label for="s-semilla">Semilla</label><input id="s-semilla" type="number" min="1" step="1" value="7"></div>
+      </div>
+      <div class="field"><label for="s-umb">Umbral de detección</label><select id="s-umb"></select></div>
+      <button class="btn ghost" type="button" id="s-otra">Otra semilla</button>
+      <p class="hint">Cada hora parte de la ventana típica del agente con una variación de volumen común a todos los conteos. Son datos simulados, no telemetría observada.</p>
+    </div>
+    <div class="stack">
+      <div class="panel" id="s-res"></div>
+    </div>
+  </section>
+
+  <section id="t-gold" class="grid" role="tabpanel" hidden>
+    <div class="panel">
+      <h2>Archivo Gold</h2>
+      <div class="field"><label for="g-file">Tabla gold_horaria_v2 exportada a CSV</label><input id="g-file" type="file" accept=".csv,.txt,text/csv"></div>
+      <div class="field"><label for="g-umb">Umbral de detección</label><select id="g-umb"></select></div>
+      <p class="hint">Columnas necesarias: <span style="font-family:var(--font-mono)" id="g-cols"></span>. Si existe <span style="font-family:var(--font-mono)">tiene_eventos</span>, se omiten las horas vacías. Todo se calcula en el navegador y el archivo no sale de él.</p>
+      <div id="g-prog" class="hint"></div>
+    </div>
+    <div class="stack" id="g-res">
+      <div class="panel"><div class="note">Carga un archivo para puntuar sus ventanas con el Autoencoder. Se agrupan por agente y se listan las horas señaladas con su explicación.</div></div>
+    </div>
+  </section>
+
+  <p class="hint" style="margin-top:18px">Horas en UTC; Lima es UTC−5. Los agentes se muestran con etiquetas ordinales y se identifican internamente por una huella del agent.uuid, no por su valor. El puntaje es log(1 + máx((error medio − mediana del agente) / escala del agente, 0)), con el error medio de las cinco redes.</p>
+</div>
+
+<script>
+/* ── Núcleo de cálculo: replica derivar_features, estandarizar y puntuar_ventanas del notebook v2.8.5 ── */
+const COUNTS=['n_creacion_procesos','n_conexiones_ip','n_eventos_dns','n_operaciones_archivos','n_inicios_sesion','n_cierres_sesion','n_indicadores_comportamiento'];
+const DIV=['n_ip_distintas','n_puertos_distintos','n_dominios_distintos','n_procesos_distintos'];
+const NOV=['n_procesos_nuevos','n_dominios_nuevos','n_ip_nuevas'];
+const AUX=['n_dns_no_resueltos','n_conex_salientes','n_conex_fallidas','n_proc_firmados'];
+const RAW_COLS=['total_eventos'].concat(COUNTS,DIV,NOV,AUX);
+const clip=(x,a,b)=>Math.min(b,Math.max(a,x));
+function cyrb53(str){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<str.length;i++){const ch=str.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (4294967296*(2097151&h2)+(h1>>>0)).toString(16);}
+function deriveFeatures(r,hour,weekend){
+  const f={};
+  for(const c of COUNTS.concat(DIV,NOV)) f['log_'+c]=Math.log1p(r[c]);
+  f.log_total_eventos=Math.log1p(r.total_eventos);
+  const razon=(n,d)=>clip(r[n]/Math.max(r[d],1),0,1);
+  f.p_dns_no_resuelto=razon('n_dns_no_resueltos','n_eventos_dns');
+  f.p_conex_salientes=razon('n_conex_salientes','n_conexiones_ip');
+  f.p_conex_fallidas=razon('n_conex_fallidas','n_conexiones_ip');
+  f.p_proc_firmados=razon('n_proc_firmados','n_creacion_procesos');
+  const tot=Math.max(r.total_eventos,1);
+  f.p_procesos=clip(r.n_creacion_procesos/tot,0,1);
+  f.p_ip=clip(r.n_conexiones_ip/tot,0,1);
+  f.p_dns=clip(r.n_eventos_dns/tot,0,1);
+  f.p_archivos=clip(r.n_operaciones_archivos/tot,0,1);
+  let s=0;for(const c of COUNTS) s+=r[c];
+  const d=Math.max(s,1);let e=0;
+  for(const c of COUNTS){const p=r[c]/d;if(p>0) e-=p*Math.log(p);}
+  f.entropia_grupos=e;
+  f.hora_sin=Math.sin(2*Math.PI*hour/24);f.hora_cos=Math.cos(2*Math.PI*hour/24);f.es_fin_semana=weekend?1:0;
+  return f;
+}
+function makeModel(M){
+  const nets=M.nets.map(n=>({W0:Float64Array.from(n['0_weight']),b0:Float64Array.from(n['0_bias']),W2:Float64Array.from(n['2_weight']),b2:Float64Array.from(n['2_bias']),
+    W3:Float64Array.from(n['3_weight']),b3:Float64Array.from(n['3_bias']),W5:Float64Array.from(n['5_weight']),b5:Float64Array.from(n['5_bias'])}));
+  const idx={};M.agentes.forEach((h,i)=>idx[h]=i);
+  return {M,nets,idx};
+}
+function lin(W,b,x,nOut,nIn,relu){const y=new Float64Array(nOut);for(let o=0;o<nOut;o++){let a=b[o];const base=o*nIn;for(let i=0;i<nIn;i++)a+=W[base+i]*x[i];y[o]=relu&&a<0?0:a;}return y;}
+function standardize(model,f,aidx){
+  const M=model.M,FA=M.features_agente;
+  const med=aidx>=0?M.med[aidx]:M.pob_med,esc=aidx>=0?M.esc[aidx]:M.pob_esc;
+  const z=new Float64Array(27);
+  for(let j=0;j<FA.length;j++) z[j]=clip((f[FA[j]]-med[j])/esc[j],-M.z_max,M.z_max);
+  M.temporales.forEach((t,k)=>z[FA.length+k]=f[t]);
+  return z;
+}
+function reconstruct(model,z){
+  const err=new Float64Array(27);let mse=0;
+  for(const n of model.nets){
+    const h=lin(n.W0,n.b0,z,128,27,true),c=lin(n.W2,n.b2,h,16,128,false),h2=lin(n.W3,n.b3,c,128,16,true),y=lin(n.W5,n.b5,h2,27,128,false);
+    let s=0;for(let k=0;k<27;k++){const d=(y[k]-z[k]);err[k]+=d*d/model.nets.length;s+=d*d;}
+    mse+=s/27;
+  }
+  return {mse:mse/model.nets.length,errVar:err};
+}
+function calOf(model,hash){const c=model.M.cal[hash];return c?{med:c[0],esc:c[1]}:{med:model.M.cal_pob.med,esc:model.M.cal_pob.esc};}
+function scoreWindow(model,hash,raw,hour,weekend){
+  const f=deriveFeatures(raw,hour,weekend);
+  const aidx=model.idx[hash]===undefined?-1:model.idx[hash];
+  const z=standardize(model,f,aidx);
+  const r=reconstruct(model,z);
+  const c=calOf(model,hash);
+  const rel=(r.mse-c.med)/c.esc;
+  return {score:Math.log1p(Math.max(rel,0)),mse:r.mse,rel,z,errVar:r.errVar,feat:f,perfilPropio:aidx>=0};
+}
+/* ventana típica reconstruida desde la mediana del perfil del agente (no es una ventana observada) */
+function typicalRaw(model,aidx){
+  const FA=model.M.features_agente,med=model.M.med[aidx],g={};FA.forEach((n,i)=>g[n]=med[i]);
+  const r={};
+  for(const c of COUNTS.concat(DIV,NOV)) r[c]=Math.max(0,Math.round(Math.expm1(g['log_'+c])));
+  r.total_eventos=Math.max(Math.round(Math.expm1(g.log_total_eventos)),COUNTS.reduce((a,c)=>a+r[c],0));
+  r.n_dns_no_resueltos=Math.round(g.p_dns_no_resuelto*r.n_eventos_dns);
+  r.n_conex_salientes=Math.round(g.p_conex_salientes*r.n_conexiones_ip);
+  r.n_conex_fallidas=Math.round(g.p_conex_fallidas*r.n_conexiones_ip);
+  r.n_proc_firmados=Math.round(g.p_proc_firmados*r.n_creacion_procesos);
+  return r;
+}
+
+</script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const nf=(x,d=2)=>Number(x).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false});
+const LBL={log_n_creacion_procesos:['Creación de procesos','procesos'],log_n_conexiones_ip:['Conexiones IP','red'],log_n_eventos_dns:['Eventos DNS','DNS'],log_n_operaciones_archivos:['Operaciones de archivos','archivos'],
+ log_n_inicios_sesion:['Inicios de sesión','sesiones'],log_n_cierres_sesion:['Cierres de sesión','sesiones'],log_n_indicadores_comportamiento:['Indicadores de comportamiento','indicadores'],
+ log_n_ip_distintas:['IP distintas','red'],log_n_puertos_distintos:['Puertos distintos','red'],log_n_dominios_distintos:['Dominios distintos','DNS'],log_n_procesos_distintos:['Procesos distintos','procesos'],
+ log_n_procesos_nuevos:['Procesos nuevos','novedad'],log_n_dominios_nuevos:['Dominios nuevos','novedad'],log_n_ip_nuevas:['IP nuevas','novedad'],log_total_eventos:['Volumen total','volumen total'],
+ p_dns_no_resuelto:['Proporción DNS no resueltos','DNS'],p_conex_salientes:['Proporción conexiones salientes','red'],p_conex_fallidas:['Proporción conexiones fallidas','red'],p_proc_firmados:['Proporción procesos firmados','procesos'],
+ p_procesos:['Peso de procesos','procesos'],p_ip:['Peso de conexiones IP','red'],p_dns:['Peso de DNS','DNS'],p_archivos:['Peso de archivos','archivos'],entropia_grupos:['Entropía de la composición','composición']};
+const RAWLBL={total_eventos:'total_eventos',n_creacion_procesos:'procesos',n_conexiones_ip:'conexiones IP',n_eventos_dns:'eventos DNS',n_operaciones_archivos:'archivos',n_inicios_sesion:'inicios sesión',n_cierres_sesion:'cierres sesión',n_indicadores_comportamiento:'indicadores',
+ n_ip_distintas:'IP distintas',n_puertos_distintos:'puertos dist.',n_dominios_distintos:'dominios dist.',n_procesos_distintos:'procesos dist.',n_procesos_nuevos:'procesos nuevos',n_dominios_nuevos:'dominios nuevos',n_ip_nuevas:'IP nuevas',
+ n_dns_no_resueltos:'DNS no resueltos',n_conex_salientes:'conex. salientes',n_conex_fallidas:'conex. fallidas',n_proc_firmados:'procesos firmados'};
+const ESC=[['ninguna','Ninguna (ventana típica)'],['aumento_procesos','Aumento de procesos'],['disminucion_procesos','Disminución de procesos'],['rafaga_red_dns','Ráfaga de red y DNS'],['rafaga_archivos','Ráfaga de archivos'],['cambio_composicion','Cambio de composición']];
+let model=null,M=null;
+const S={tab:'ventana',k:3,vk:3,sk:3,sd:3};
+let v={raw:null,editado:false};
+
+/* ── desviaciones simuladas (Tabla 5 del Capítulo III) ── */
+function escVar(a,c){return M.esc[a][M.features_agente.indexOf('log_'+c)];}
+function up(raw,c,k,s,fac){return Math.round(Math.expm1(Math.log1p(raw[c])+k*s*(fac||1)));}
+function aplicar(base,esc,k,a){
+  const r=Object.assign({},base),nota=[];
+  if(esc==='aumento_procesos'){const nv=up(r,'n_creacion_procesos',k,escVar(a,'n_creacion_procesos'));const d=nv-r.n_creacion_procesos;r.n_creacion_procesos=nv;r.total_eventos+=d;}
+  else if(esc==='disminucion_procesos'){const p=r.n_creacion_procesos;if(p<1){nota.push('No aplica: la ventana no tiene procesos que disminuir.');}else{const nv=Math.max(0,Math.round(Math.expm1(Math.log1p(p)-k*escVar(a,'n_creacion_procesos'))));r.n_creacion_procesos=nv;r.total_eventos=Math.max(r.total_eventos-(p-nv),COUNTS.reduce((s,c)=>s+r[c],0));}}
+  else if(esc==='rafaga_red_dns'){const ni=up(r,'n_conexiones_ip',k,escVar(a,'n_conexiones_ip')),nd=up(r,'n_eventos_dns',k,escVar(a,'n_eventos_dns'));const di=ni-r.n_conexiones_ip,dd=nd-r.n_eventos_dns;
+    r.n_conexiones_ip=ni;r.n_eventos_dns=nd;r.n_ip_distintas+=Math.round(di*.5);r.n_ip_nuevas+=Math.round(di*.5);r.n_puertos_distintos+=Math.round(di*.2);r.n_dominios_distintos+=Math.round(dd*.5);r.n_dominios_nuevos+=Math.round(dd*.5);
+    r.n_conex_salientes+=di;r.n_conex_fallidas+=Math.round(di*.3);r.n_dns_no_resueltos+=Math.round(dd*.3);r.total_eventos+=di+dd;}
+  else if(esc==='rafaga_archivos'){const na=up(r,'n_operaciones_archivos',k,escVar(a,'n_operaciones_archivos')),np=up(r,'n_creacion_procesos',k,escVar(a,'n_creacion_procesos'),.3);
+    r.total_eventos+=(na-r.n_operaciones_archivos)+(np-r.n_creacion_procesos);r.n_operaciones_archivos=na;r.n_creacion_procesos=np;}
+  else if(esc==='cambio_composicion'){const minp=k<=1.5?5:4,p=r.n_creacion_procesos;if(p<minp){nota.push('No aplica: la ventana tiene '+p+' procesos y el escenario exige al menos '+minp+' con esta severidad.');}else{
+    const mv=Math.max(1,Math.floor(Math.min(.15*k,.9)*p)),a1=Math.ceil(mv/2);r.n_creacion_procesos-=mv;r.n_operaciones_archivos+=a1;r.n_conexiones_ip+=mv-a1;}}
+  return {raw:r,nota};
+}
+const COUNTS_=COUNTS;
+function fillSel(el,opts,val){el.innerHTML=opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('');if(val!==undefined)el.value=val;}
+function umbralOpts(){const u=M.umbrales,o=[['P99','Percentil 99 de validación (principal) · '+nf(u.P99,3)]];
+  Object.keys(u.presupuesto_falsas_alertas_por_agente_dia).forEach(b=>o.push(['b'+b,'Presupuesto '+nf(b,b<1?(b==0.25?2:1):0)+' falsas alertas por agente y día · '+nf(u.presupuesto_falsas_alertas_por_agente_dia[b],3)]));return o;}
+function umbralVal(key){return key==='P99'?M.umbrales.P99:M.umbrales.presupuesto_falsas_alertas_por_agente_dia[key.slice(1)];}
+const lab=i=>'Agente '+String(i+1).padStart(3,'0');
+
+/* ── gráficos ── */
+function barChart(o){
+  const W=720,H=250,L=44,R=12,T=12,B=30,pw=W-L-R,ph=H-T-B,n=o.values.length;
+  const tmax=Math.max.apply(null,o.thr.map(t=>t.v));
+  let ymax=Math.max(tmax*1.18,Math.max.apply(null,o.values)*1.08,1);ymax=Math.ceil(ymax*2)/2;
+  const X=i=>L+pw*(i+.5)/n,Y=y=>T+ph*(1-y/ymax),bw=Math.max(1,pw/n*.7);
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+(o.aria||'Puntaje por hora')+'">';
+  const step=ymax<=3?.5:1;for(let y=0;y<=ymax+1e-9;y+=step){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(y)+'" y2="'+Y(y)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-6)+'" y="'+(Y(y)+3.5)+'" text-anchor="end">'+nf(y,step<1?1:0)+'</text>';}
+  if(o.band){const x0=L+pw*o.band[0]/n,x1=L+pw*(o.band[1]+1)/n;s+='<rect x="'+x0+'" y="'+T+'" width="'+(x1-x0)+'" height="'+ph+'" fill="var(--band)"/><text x="'+(x0+4)+'" y="'+(T+11)+'">desviación simulada</text>';}
+  const every=Math.max(1,Math.ceil(n/12));
+  for(let i=0;i<n;i+=every){s+='<text x="'+X(i)+'" y="'+(H-10)+'" text-anchor="middle">'+o.xl(i)+'</text>';}
+  o.values.forEach((y,i)=>{if(y===null)return;const fl=y>o.thr[0].v;s+='<rect x="'+(X(i)-bw/2)+'" y="'+Y(y)+'" width="'+bw+'" height="'+Math.max(0,Y(0)-Y(y))+'" fill="'+(fl?'var(--alert)':'var(--accent)')+'" rx="1"><title>'+o.tip(i)+'</title></rect>';});
+  o.thr.forEach((t,j)=>{s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(t.v)+'" y2="'+Y(t.v)+'" stroke="var(--ink)" stroke-width="1" stroke-dasharray="5 4"/><text x="'+(W-R)+'" y="'+(Y(t.v)-4)+'" text-anchor="end" style="fill:var(--ink)">'+t.l+'</text>';});
+  s+='<text x="'+L+'" y="9" text-anchor="start">puntaje</text></svg>';return s;
+}
+function gauge(score,thr,m){
+  const cw=document.documentElement.clientWidth||720,W=Math.max(320,Math.min(720,cw<700?cw-64:720)),H=66,L=10,R=10,pw=W-L-R;const ymax=Math.max(5,Math.ceil(score*1.1),Math.ceil(thr*1.3));const X=x=>L+pw*x/ymax;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Puntaje frente al umbral"><rect x="'+L+'" y="24" width="'+pw+'" height="12" rx="2" fill="var(--band)"/>';
+  s+='<rect x="'+L+'" y="24" width="'+Math.max(2,X(Math.min(score,ymax))-L)+'" height="12" rx="2" fill="'+(score>thr?'var(--alert)':'var(--accent)')+'"/>';
+  for(let t=0;t<=ymax;t++){s+='<line x1="'+X(t)+'" x2="'+X(t)+'" y1="36" y2="40" stroke="var(--muted)"/><text x="'+X(t)+'" y="52" text-anchor="middle">'+t+'</text>';}
+  Object.values(m.umbrales.presupuesto_falsas_alertas_por_agente_dia).forEach(u=>{if(u<=ymax)s+='<path d="M'+X(u)+' 22 l-3 -6 h6 z" fill="var(--muted)"/>';});
+  s+='<line x1="'+X(thr)+'" x2="'+X(thr)+'" y1="12" y2="40" stroke="var(--ink)" stroke-width="2"/><text x="'+X(thr)+'" y="9" text-anchor="middle" style="fill:var(--ink)">umbral '+nf(thr,2)+'</text>';
+  return s+'</svg><p class="hint" style="margin-top:0">Los triángulos marcan los umbrales por presupuesto de falsas alertas (3, 2, 1, 0,5, 0,25 y 0,1 por agente y día, de izquierda a derecha).</p>';
+}
+
+/* ── pestaña 1 ── */
+function typicalOf(a){return typicalRaw(model,a);}
+function recompute1(){
+  const a=+$('v-agente').value,hour=+$('v-hora').value,fin=$('v-fin').value==='1';
+  const base=typicalOf(a);
+  if(!v.editado){const r=aplicar(base,$('v-esc').value,S.vk,a);v.raw=r.raw;v.nota=r.nota;}
+  const c=$('v-counts');
+  if(!c.dataset.ok||c.dataset.agent!==String(a)){
+    c.innerHTML=RAW_COLS.map(k=>'<div><label for="rc-'+k+'">'+RAWLBL[k]+'</label><input type="number" min="0" step="1" id="rc-'+k+'"><small id="rt-'+k+'"></small></div>').join('');
+    c.dataset.ok='1';c.dataset.agent=String(a);
+    RAW_COLS.forEach(k=>$('rc-'+k).addEventListener('input',e=>{v.editado=true;const x=Math.max(0,Math.round(+e.target.value||0));v.raw[k]=x;v.nota=[];render1();}));
+  }
+  RAW_COLS.forEach(k=>{const el=$('rc-'+k);if(document.activeElement!==el)el.value=v.raw[k];$('rt-'+k).textContent='típico '+base[k];});
+  render1();
+}
+function render1(){
+  const a=+$('v-agente').value,hour=+$('v-hora').value,fin=$('v-fin').value==='1',thr=umbralVal($('v-umb').value);
+  const raw=Object.assign({},v.raw);const sumC=COUNTS.reduce((s,c)=>s+raw[c],0);let aviso=v.nota&&v.nota.length?v.nota.join(' '):'';
+  if(raw.total_eventos<sumC){raw.total_eventos=sumC;aviso+=(aviso?' ':'')+'El total de eventos se ajustó a la suma de los conteos.';}
+  const r=scoreWindow(model,M.agentes[a],raw,hour,fin);const on=r.score>thr;
+  $('v-res').innerHTML='<h2>Resultado</h2><div class="verdict"><div class="score">'+nf(r.score,2)+'<small>puntaje</small></div>'+
+   '<div class="state '+(on?'on':'off')+'" role="status">'+(on?'▲ Ventana señalada':'● Dentro de lo habitual')+'</div></div>'+
+   '<div class="gauge">'+gauge(r.score,thr,M)+'</div>'+
+   '<p class="hint">Error de reconstrucción medio '+nf(r.mse,4)+' frente a la mediana natural del agente ('+nf(calOf(model,M.agentes[a]).med,4)+') y su escala ('+nf(calOf(model,M.agentes[a]).esc,4)+'). Equivale a '+nf(Math.max(r.rel,0),2)+' escalas por encima de lo natural.'+(aviso?'<br>'+aviso:'')+'</p>';
+  const FA=M.features_agente,rows=FA.map((n,j)=>({n,z:r.z[j],e:r.errVar[j],g:LBL[n][1],t:LBL[n][0]})).sort((x,y)=>y.e-x.e).slice(0,8),emax=Math.max(rows[0].e,1e-9);
+  $('v-expl').innerHTML='<table><thead><tr><th>Variable</th><th>Grupo</th><th class="num">Valor z</th><th class="bar-cell">Error de reconstrucción</th></tr></thead><tbody>'+
+   rows.map(x=>'<tr><td>'+x.t+'</td><td>'+x.g+'</td><td class="num">'+(Math.abs(x.z)<.05?'0,0':(x.z>0?'+':'')+nf(x.z,1))+'</td><td class="bar-cell"><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:'+Math.max(1,100*x.e/emax)+'%"></div><span class="num" style="font-family:var(--font-mono);font-size:.78rem">'+nf(x.e,3)+'</span></div></td></tr>').join('')+
+   '</tbody></table><p class="hint">Valor z: distancia al valor típico del agente en escalas robustas (recortada en ±10). Las ocho variables con mayor error son las que el Autoencoder no logra reconstruir a partir de las demás.</p>';
+}
+
+/* ── pestaña 2 ── */
+function rng(seed){let s=(seed*2654435761)>>>0||1;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
+function gauss(r){return Math.sqrt(-2*Math.log(r()+1e-12))*Math.cos(2*Math.PI*r());}
+function render2(){
+  const a=+$('s-agente').value,esc=$('s-esc').value,ini=Math.max(0,Math.min(46,Math.round(+$('s-ini').value||0))),D=S.sd,k=S.sk,amp=Math.max(0,+$('s-ruido').value||0),thr=umbralVal($('s-umb').value);
+  const r=rng(Math.max(1,Math.round(+$('s-semilla').value||1))*7919+a),base=typicalOf(a),sd=Math.max(escVar(a,'total_eventos'),.3),N=48,out=[],ep=[];
+  for(let h=0;h<N;h++){
+    const e=gauss(r)*amp*sd,raw={};RAW_COLS.forEach(c=>raw[c]=Math.round(base[c]*Math.exp(e)));
+    const dentro=h>=ini&&h<ini+D;let fin=raw;if(dentro&&esc!=='ninguna'){fin=aplicar(raw,esc,k,a).raw;}
+    const sumC=COUNTS.reduce((s,c)=>s+fin[c],0);if(fin.total_eventos<sumC)fin.total_eventos=sumC;
+    const s=scoreWindow(model,M.agentes[a],fin,h%24,false);out.push(s.score);ep.push(dentro);}
+  const fl=out.map(x=>x>thr),enEp=fl.filter((f,i)=>f&&ep[i]).length,fuera=fl.filter((f,i)=>f&&!ep[i]).length,hEp=Math.min(D,N-ini);
+  const det=enEp>0;
+  $('s-res').innerHTML='<h2>Serie de 48 horas</h2><div class="kpis"><div class="kpi"><b>'+(esc==='ninguna'?'—':(det?'Sí':'No'))+'</b><span>episodio detectado</span></div>'+
+   '<div class="kpi"><b>'+enEp+' / '+hEp+'</b><span>horas del episodio señaladas</span></div><div class="kpi"><b>'+fuera+'</b><span>falsas alertas fuera del episodio</span></div>'+
+   '<div class="kpi"><b>'+nf(fuera/2,1)+'</b><span>falsas alertas por día (este agente)</span></div></div>'+
+   '<div class="chart">'+barChart({values:out,thr:[{v:thr,l:'umbral '+nf(thr,2)}],band:esc==='ninguna'?null:[ini,Math.min(N-1,ini+D-1)],xl:i=>String(i%24).padStart(2,'0')+'h',tip:i=>'Hora '+(i%24)+' UTC · día '+(1+Math.floor(i/24))+' · puntaje '+nf(out[i],2),aria:'Puntaje del Autoencoder por hora durante 48 horas simuladas'})+'</div>'+
+   '<p class="hint">Eje horizontal: horas UTC desde las 00h del día 1. Las barras en color de alerta superan el umbral. Con variación de volumen 0,5 la tasa de falsas alertas ronda el 1 % de las horas, que es lo que fija el percentil 99.</p>';
+}
+
+/* ── pestaña 3 ── */
+let G=null;
+function parseCSV(text){
+  const first=text.slice(0,text.indexOf('\n')),delim=(first.split(';').length>first.split(',').length)?';':',';
+  const rows=[];let cur=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;}
+    else if(ch==='"')q=true;else if(ch===delim){cur.push(f);f='';}else if(ch==='\n'){cur.push(f.replace(/\r$/,''));rows.push(cur);cur=[];f='';}else f+=ch;}
+  if(f.length||cur.length){cur.push(f.replace(/\r$/,''));rows.push(cur);}return rows;
+}
+async function cargarGold(file){
+  const prog=$('g-prog');prog.textContent='Leyendo archivo…';
+  const text=await file.text(),rows=parseCSV(text),hdr=rows[0].map(x=>x.trim());
+  const need=['agente','inicio_ventana'].concat(RAW_COLS),miss=need.filter(c=>hdr.indexOf(c)<0);
+  if(miss.length){$('g-res').innerHTML='<div class="panel"><div class="note">Faltan columnas: <b style="font-family:var(--font-mono)">'+miss.join(', ')+'</b>. Exporta la tabla completa con SELECT * y vuelve a cargarla.</div></div>';prog.textContent='';return;}
+  const ix={};hdr.forEach((h,i)=>ix[h]=i);const hasEv=ix.tiene_eventos!==undefined;const out=[];const lbls={};let sin=0;
+  const total=rows.length-1;
+  for(let s=1;s<rows.length;s+=400){
+    for(let i=s;i<Math.min(rows.length,s+400);i++){const r=rows[i];if(r.length<hdr.length)continue;
+      if(hasEv){const te=String(r[ix.tiene_eventos]).toLowerCase();if(te==='false'||te==='0'||te==='')continue;}
+      const raw={};let bad=false;RAW_COLS.forEach(c=>{const x=parseFloat(String(r[ix[c]]).replace(',','.'));if(!isFinite(x))bad=true;raw[c]=bad?0:x;});if(bad)continue;
+      let ts=r[ix.inicio_ventana].trim();if(!/[zZ]|[+-]\d\d:?\d\d$/.test(ts))ts=ts.replace(' ','T')+'Z';const d=new Date(ts);if(isNaN(d))continue;
+      const h=cyrb53(r[ix.agente].trim());const wd=d.getUTCDay();
+      const sc=scoreWindow(model,h,raw,d.getUTCHours(),wd===0||wd===6);
+      out.push({h,t:d.getTime(),score:sc.score,errVar:sc.errVar,z:sc.z,propio:sc.perfilPropio});}
+    prog.textContent='Puntuando '+Math.min(total,s+399)+' de '+total+' filas…';await new Promise(r=>setTimeout(r,0));
+  }
+  prog.textContent='';G=out;G.sort((x,y)=>x.h<y.h?-1:x.h>y.h?1:x.t-y.t);renderGold();
+}
+function grupoDe(e){const FA=M.features_agente;let b=0;for(let j=1;j<24;j++)if(e[j]>e[b])b=j;return LBL[FA[b]];}
+function renderGold(){
+  if(!G||!G.length){$('g-res').innerHTML='<div class="panel"><div class="note">No se encontraron ventanas válidas en el archivo.</div></div>';return;}
+  const thr=umbralVal($('g-umb').value),by={};G.forEach(w=>{(by[w.h]=by[w.h]||[]).push(w);});
+  const ags=Object.keys(by).map((h,i)=>{const ws=by[h],idx=model.idx[h];return {h,ws,n:ws.length,fl:ws.filter(w=>w.score>thr).length,idx,propio:idx!==undefined};}).sort((x,y)=>y.fl-x.fl||y.n-x.n);
+  ags.forEach((a,i)=>a.label=a.propio?lab(a.idx):'Sin perfil '+(i+1));
+  const totalFl=ags.reduce((s,a)=>s+a.fl,0),sinP=ags.filter(a=>!a.propio).length;
+  const keep=$('g-ag')?$('g-ag').value:ags[0].h;
+  let html='<div class="panel"><h2>Resumen</h2><div class="kpis"><div class="kpi"><b>'+G.length.toLocaleString('es-PE')+'</b><span>ventanas puntuadas</span></div><div class="kpi"><b>'+ags.length+'</b><span>agentes</span></div>'+
+    '<div class="kpi"><b>'+totalFl+'</b><span>ventanas señaladas ('+nf(100*totalFl/G.length,2)+' %)</span></div></div>'+
+    (sinP?'<div class="note">'+sinP+' agente(s) no están entre los 98 con perfil: se evaluaron con el perfil poblacional y la calibración poblacional, por lo que su puntaje es menos confiable.</div>':'')+
+    '<div class="field" style="margin-top:12px"><label for="g-ag">Agente</label><select id="g-ag">'+ags.map(a=>'<option value="'+a.h+'">'+a.label+' · '+a.n+' ventanas · '+a.fl+' señaladas</option>').join('')+'</select></div><div class="chart" id="g-chart"></div></div>';
+  const top=G.map(w=>Object.assign({},w)).sort((x,y)=>y.score-x.score).filter(w=>w.score>thr).slice(0,15);
+  const lblOf={};ags.forEach(a=>lblOf[a.h]=a.label);
+  html+='<div class="panel"><h2>Ventanas señaladas de mayor puntaje</h2>'+(top.length?'<div class="scroll"><table><thead><tr><th>Agente</th><th>Hora UTC</th><th>Hora Lima</th><th class="num">Puntaje</th><th class="num">× umbral</th><th>Variable dominante</th></tr></thead><tbody>'+
+   top.map(w=>{const d=new Date(w.t),l=new Date(w.t-5*3600e3),g=grupoDe(w.errVar);const f=x=>x.toISOString().slice(0,16).replace('T',' ');return '<tr><td>'+lblOf[w.h]+'</td><td class="num">'+f(d)+'</td><td class="num">'+f(l)+'</td><td class="num">'+nf(w.score,2)+'</td><td class="num">'+nf(w.score/thr,2)+'</td><td>'+g[0]+' ('+g[1]+')</td></tr>';}).join('')+'</tbody></table></div>':'<div class="note">Ninguna ventana supera el umbral elegido.</div>')+'</div>';
+  $('g-res').innerHTML=html;$('g-ag').value=keep&&by[keep]?keep:ags[0].h;
+  const drawAg=()=>{const ws=by[$('g-ag').value],t0=ws[0].t,hrs=ws.map(w=>Math.round((w.t-t0)/3600e3)),n=hrs[hrs.length-1]+1,vals=new Array(n).fill(null);ws.forEach((w,i)=>vals[hrs[i]]=w.score);
+    $('g-chart').innerHTML=barChart({values:vals,thr:[{v:thr,l:'umbral '+nf(thr,2)}],xl:i=>{const d=new Date(t0+i*3600e3);return d.toISOString().slice(5,10);},tip:i=>new Date(t0+i*3600e3).toISOString().slice(0,16).replace('T',' ')+' UTC · puntaje '+(vals[i]===null?'sin datos':nf(vals[i],2)),aria:'Puntaje por hora del agente'});};
+  $('g-ag').addEventListener('change',drawAg);drawAg();
+}
+
+/* ── arranque ── */
+function chips(){const u=M.umbrales;$('chips').innerHTML=['Autoencoder 27·128·16·128·27','5 redes promediadas','W = 1','umbral P99 = '+nf(u.P99,3),M.version].map(x=>'<span class="chip">'+x+'</span>').join('');}
+function tabs(){
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{S.tab=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x===b?'true':'false'));
+    ['ventana','serie','gold'].forEach(t=>$('t-'+t).hidden=t!==S.tab);try{history.replaceState(null,'','#'+S.tab);}catch(e){}}));
+}
+function seg(id,key,attr,cb){document.querySelectorAll('#'+id+' button').forEach(b=>b.addEventListener('click',()=>{S[key]=+b.dataset[attr];document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));cb();}));}
+function init(){
+  const ag=[];for(let i=0;i<M.agentes.length;i++)ag.push([i,lab(i)]);
+  ['v-agente','s-agente'].forEach(id=>fillSel($(id),ag,0));
+  fillSel($('v-hora'),Array.from({length:24},(_,h)=>[h,String(h).padStart(2,'0')+':00 · Lima '+String((h+19)%24).padStart(2,'0')+'h']),12);
+  ['v-esc','s-esc'].forEach(id=>fillSel($(id),ESC));$('v-esc').value='rafaga_red_dns';$('s-esc').value='rafaga_red_dns';
+  ['v-umb','s-umb','g-umb'].forEach(id=>fillSel($(id),umbralOpts(),'P99'));
+  $('g-cols').textContent=['agente','inicio_ventana'].concat(RAW_COLS).join(', ');
+  chips();tabs();
+  $('v-agente').addEventListener('change',()=>{v.editado=false;$('v-counts').dataset.ok='';recompute1();});
+  ['v-esc','v-hora','v-fin'].forEach(id=>$(id).addEventListener('change',()=>{if(id==='v-esc')v.editado=false;recompute1();}));
+  $('v-umb').addEventListener('change',render1);
+  seg('v-k','vk','k',()=>{v.editado=false;recompute1();});
+  ['s-agente','s-esc','s-umb','s-ini','s-ruido','s-semilla'].forEach(id=>$(id).addEventListener('input',render2));
+  seg('s-k','sk','k',render2);seg('s-d','sd','d',render2);
+  $('s-otra').addEventListener('click',()=>{$('s-semilla').value=(+$('s-semilla').value||1)+1;render2();});
+  $('g-umb').addEventListener('change',()=>{if(G)renderGold();});
+  $('g-file').addEventListener('change',e=>{if(e.target.files[0])cargarGold(e.target.files[0]);});
+  recompute1();render2();
+  const h=(location.hash||'').slice(1);if(['ventana','serie','gold'].indexOf(h)>=0){document.querySelector('.tab[data-tab="'+h+'"]').click();}
+}
+fetch('modelo.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).then(j=>{M=j;model=makeModel(M);init();}).catch(e=>{const s=$('estado');s.hidden=false;s.textContent='No se pudo cargar el modelo (modelo.json). '+e.message;});
+})();
+</script>
